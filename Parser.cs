@@ -7,7 +7,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
 
-namespace DataTableJs.ServerSide.Models
+namespace DataTableJs.ServerSide
 {
     public static class Parser
     {
