@@ -6,45 +6,51 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace DataTableJs.ServerSide
 {
     public static class Parser
     {
         /// <summary>
-        /// Applies DataTables server-side processing (filtering, sorting, pagination) to an IQueryable source.
+        /// Applies all datatable.js filters, sorting, and pagination to the provided IQueryable source.
         /// </summary>
-        /// <typeparam name="T">The entity type.</typeparam>
-        /// <param name="src">The source queryable.</param>
-        /// <param name="request">The DataTables request containing filter, sort, and pagination parameters.</param>
-        /// <returns>A processed IQueryable with filters, sorting, and pagination applied.</returns>
-        public static IQueryable<T> ParseQuery<T>(this IQueryable<T> src, DataTableServerRequest request)
+        /// <remarks>The returned UnpaginatedQuery includes all filters and sorting but excludes
+        /// pagination, which can be useful for obtaining total record counts. PaginatedQuery includes all filters,
+        /// sorting, and pagination as specified in the request.</remarks>
+        /// <typeparam name="T">The type of the elements in the queryable source.</typeparam>
+        /// <param name="src">The queryable data source to which filters, sorting, and pagination will be applied. Cannot be null.</param>
+        /// <param name="request">The DataTable server request containing filtering, sorting, and pagination parameters. Cannot be null.</param>
+        /// <returns>A tuple containing the queryable result after applying all filters and sorting (UnpaginatedQuery), and the
+        /// queryable result after applying pagination (PaginatedQuery).</returns>
+        /// <exception cref="ArgumentNullException">Thrown if either src or request is null.</exception>
+        public static (IQueryable<T> UnpaginatedQuery, IQueryable<T> PaginatedQuery) ApplyFilters<T>(this IQueryable<T> src, DataTableServerRequest request)
         {
             if (src == null)
                 throw new ArgumentNullException(nameof(src));
-            
+
             if (request == null)
                 throw new ArgumentNullException(nameof(request));
 
             // Apply global search filter
-            src = ApplyGlobalSearch(src, request);
+            var beforePagination = ApplyGlobalSearch(src, request);
 
             // Apply column-specific search filters
-            src = ApplyColumnSearch(src, request);
+            beforePagination = ApplyColumnSearch(beforePagination, request);
 
             // Apply sorting
-            src = ApplyOrdering(src, request);
+            beforePagination = ApplyOrdering(beforePagination, request);
 
             // Apply pagination
-            src = ApplyPagination(src, request);
+            var afterPagination = ApplyPagination(beforePagination, request);
 
-            return src;
+            return (beforePagination, afterPagination);
         }
 
         /// <summary>
         /// Applies global search filtering across all searchable columns.
         /// </summary>
-        private static IQueryable<T> ApplyGlobalSearch<T>(IQueryable<T> src, DataTableServerRequest request)
+        public static IQueryable<T> ApplyGlobalSearch<T>(IQueryable<T> src, DataTableServerRequest request)
         {
             if (request.Search == null || string.IsNullOrWhiteSpace(request.Search.Value))
                 return src;
@@ -89,7 +95,7 @@ namespace DataTableJs.ServerSide
         /// <summary>
         /// Applies column-specific search filters.
         /// </summary>
-        private static IQueryable<T> ApplyColumnSearch<T>(IQueryable<T> src, DataTableServerRequest request)
+        public static IQueryable<T> ApplyColumnSearch<T>(IQueryable<T> src, DataTableServerRequest request)
         {
             if (request.Columns == null || !request.Columns.Any())
                 return src;
@@ -106,7 +112,7 @@ namespace DataTableJs.ServerSide
 
                 var searchValue = column.Search.Value.Trim();
                 var propertyExpression = GetPropertyExpression(parameter, column.Data);
-                
+
                 if (propertyExpression == null)
                     continue;
 
@@ -124,7 +130,7 @@ namespace DataTableJs.ServerSide
         /// <summary>
         /// Applies sorting based on the order specifications.
         /// </summary>
-        private static IQueryable<T> ApplyOrdering<T>(IQueryable<T> src, DataTableServerRequest request)
+        public static IQueryable<T> ApplyOrdering<T>(IQueryable<T> src, DataTableServerRequest request)
         {
             if (request.Order == null || !request.Order.Any())
                 return src;
@@ -141,7 +147,7 @@ namespace DataTableJs.ServerSide
                     continue;
 
                 var column = request.Columns[order.Column];
-                
+
                 if (!column.Orderable || string.IsNullOrWhiteSpace(column.Data))
                     continue;
 
@@ -168,7 +174,7 @@ namespace DataTableJs.ServerSide
         /// <summary>
         /// Applies pagination (skip and take).
         /// </summary>
-        private static IQueryable<T> ApplyPagination<T>(IQueryable<T> src, DataTableServerRequest request)
+        public static IQueryable<T> ApplyPagination<T>(IQueryable<T> src, DataTableServerRequest request)
         {
             if (request.Start > 0)
                 src = src.Skip(request.Start);
@@ -178,6 +184,8 @@ namespace DataTableJs.ServerSide
 
             return src;
         }
+
+        #region PRIVATE
 
         /// <summary>
         /// Gets a property expression for a given property path (supports nested properties).
@@ -301,5 +309,7 @@ namespace DataTableJs.ServerSide
 
             return (IOrderedQueryable<T>)source.Provider.CreateQuery<T>(resultExpression);
         }
+        #endregion
+
     }
 }

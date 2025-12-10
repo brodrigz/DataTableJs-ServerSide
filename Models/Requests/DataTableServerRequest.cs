@@ -8,7 +8,7 @@ namespace DataTableJs.ServerSide.Models.Requests
     /// <summary>
     /// Represents a server-side processing request from DataTables.js.
     /// </summary>
-    public sealed class DataTableServerRequest
+    public class DataTableServerRequest
     {
         /// <summary>
         /// Draw counter sent by DataTables to ensure request/response alignment. This should be echoed back in the response.
