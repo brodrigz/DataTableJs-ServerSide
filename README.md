@@ -5,6 +5,8 @@ A minimal .NET Standard 2.0 library for server-side processing with DataTables.j
 Contains models for expected requests and responses,
 and a LINQ extension method to apply filtering, sorting, and pagination to any IQueryable using reflection (EF friendly).
 
+For detailed information about implementation or inner workings of the API please reffer to the dt.js official doccumentation on [server-side processing](https://datatables.net/manual/server-side).
+
 ### Usage
 
 ```csharp
@@ -39,20 +41,18 @@ public IActionResult GetData([FromBody] DataTableServerRequest request)
 - **Column-specific search** - Individual search filters per column
 - **Multi-column sorting** - Sort by multiple columns with ascending/descending support
 - **Pagination** - Skip and take support
-- **Nested property support** - Access nested properties using dot notation (e.g., `"User.Name"`)
 - **Null-safe operations** - Handles null values gracefully
-- **Case-insensitive** - Property matching is case-insensitive
-- **EF-friendly** - Uses IQueryable and generates efficient SQL queries
+- **EF-friendly** - Compatible with any IQueryable, when using an ORM filters are properly transformed into SQL queries
 
 ## API
 
 ### Parser Methods
 
 - `ApplyFilters<T>(IQueryable<T>, DataTableServerRequest)` - Applies all filters, sorting, and pagination. Returns a tuple with unpaginated and paginated queries.
-- `ApplyGlobalSearch<T>(IQueryable<T>, DataTableServerRequest)` - Applies global search only.
-- `ApplyColumnSearch<T>(IQueryable<T>, DataTableServerRequest)` - Applies column-specific search only.
-- `ApplyOrdering<T>(IQueryable<T>, DataTableServerRequest)` - Applies sorting only.
-- `ApplyPagination<T>(IQueryable<T>, DataTableServerRequest)` - Applies pagination only.
+- `ApplyGlobalSearch<T>(IQueryable<T>, DataTableServerRequest)` - Applies global search.
+- `ApplyColumnSearch<T>(IQueryable<T>, DataTableServerRequest)` - Applies column-specific search.
+- `ApplyOrdering<T>(IQueryable<T>, DataTableServerRequest)` - Applies sorting.
+- `ApplyPagination<T>(IQueryable<T>, DataTableServerRequest)` - Applies pagination.
 
 ### Response Helpers
 
