@@ -24,7 +24,7 @@ namespace DataTableJs.ServerSide.Models.Requests
         /// <para>Even when disabled, the column can still be filtered using the column-specific search</para>
         /// </summary>
         [JsonProperty("searchable")]
-        public bool GlobalSearchable { get; set; }
+        public bool Searchable { get; set; }
 
         /// <summary>
         /// Indicates whether the column is orderable (sortable).
