@@ -52,14 +52,14 @@ namespace DataTableJs.ServerSide
         /// </summary>
         public static IQueryable<T> ApplyGlobalSearch<T>(IQueryable<T> src, DataTableServerRequest request)
         {
-            if (request.Search == null || string.IsNullOrWhiteSpace(request.Search.Value))
+            if (request.GlobalSearch == null || string.IsNullOrWhiteSpace(request.GlobalSearch.Value))
                 return src;
 
             if (request.Columns == null || !request.Columns.Any())
                 return src;
 
-            var searchValue = request.Search.Value.Trim();
-            var searchableColumns = request.Columns.Where(c => c.Searchable && !string.IsNullOrWhiteSpace(c.Data)).ToList();
+            var searchValue = request.GlobalSearch.Value.Trim();
+            var searchableColumns = request.Columns.Where(c => c.GlobalSearchable && !string.IsNullOrWhiteSpace(c.Data)).ToList();
 
             if (!searchableColumns.Any())
                 return src;

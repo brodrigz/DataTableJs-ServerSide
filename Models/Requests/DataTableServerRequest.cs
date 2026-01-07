@@ -39,7 +39,7 @@ namespace DataTableJs.ServerSide.Models.Requests
         /// Global search term and options. Can be null if no global search is applied.
         /// </summary>
         [JsonProperty("search")]
-        public DataTableSearchRequest Search { get; set; }
+        public DataTableSearchRequest GlobalSearch { get; set; }
 
         /// <summary>
         /// Sorting instructions sent by DataTables, ordered by priority. Can be null if no ordering is applied.

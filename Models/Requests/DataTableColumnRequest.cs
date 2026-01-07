@@ -20,10 +20,11 @@ namespace DataTableJs.ServerSide.Models.Requests
         public string Name { get; set; }
 
         /// <summary>
-        /// Indicates whether the column is searchable.
+        /// Indicates whether the column is considered when performing global search via the search bar.
+        /// <para>Even when disabled, the column can still be filtered using the column-specific search</para>
         /// </summary>
         [JsonProperty("searchable")]
-        public bool Searchable { get; set; }
+        public bool GlobalSearchable { get; set; }
 
         /// <summary>
         /// Indicates whether the column is orderable (sortable).
