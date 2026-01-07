@@ -74,12 +74,12 @@ namespace DataTableJs.ServerSide
                 if (propertyExpression == null)
                     continue;
 
-                var containsExpression = BuildContainsExpression(propertyExpression, searchValue);
-                if (containsExpression != null)
+                var searchExpression = BuildSearchExpression(propertyExpression, searchValue);
+                if (searchExpression != null)
                 {
                     orExpression = orExpression == null
-                        ? containsExpression
-                        : Expression.OrElse(orExpression, containsExpression);
+                        ? searchExpression
+                        : Expression.OrElse(orExpression, searchExpression);
                 }
             }
 
@@ -107,7 +107,7 @@ namespace DataTableJs.ServerSide
                 if (column.Search == null || string.IsNullOrWhiteSpace(column.Search.Value))
                     continue;
 
-                if (!column.Searchable || string.IsNullOrWhiteSpace(column.Data))
+                if (string.IsNullOrWhiteSpace(column.Data))
                     continue;
 
                 var searchValue = column.Search.Value.Trim();
@@ -116,10 +116,10 @@ namespace DataTableJs.ServerSide
                 if (propertyExpression == null)
                     continue;
 
-                var containsExpression = BuildContainsExpression(propertyExpression, searchValue);
-                if (containsExpression != null)
+                var searchExpression = BuildSearchExpression(propertyExpression, searchValue);
+                if (searchExpression != null)
                 {
-                    var lambda = Expression.Lambda<Func<T, bool>>(containsExpression, parameter);
+                    var lambda = Expression.Lambda<Func<T, bool>>(searchExpression, parameter);
                     src = src.Where(lambda);
                 }
             }
@@ -218,32 +218,170 @@ namespace DataTableJs.ServerSide
         }
 
         /// <summary>
-        /// Builds a Contains expression for string searching.
+        /// Builds a search expression appropriate for the property type.
         /// </summary>
-        private static Expression BuildContainsExpression(Expression propertyExpression, string searchValue)
+        private static Expression BuildSearchExpression(Expression propertyExpression, string searchValue)
         {
             try
             {
-                // Convert property to string if it's not already
-                var stringExpression = propertyExpression.Type == typeof(string)
-                    ? propertyExpression
-                    : Expression.Call(propertyExpression, "ToString", null);
-
-                // Check for null
-                var notNullExpression = Expression.NotEqual(stringExpression, Expression.Constant(null, typeof(string)));
-
-                // Create Contains method call
-                var containsMethod = typeof(string).GetMethod("Contains", new[] { typeof(string) });
-                var searchExpression = Expression.Constant(searchValue);
-                var containsCall = Expression.Call(stringExpression, containsMethod, searchExpression);
-
-                // Combine: property != null && property.Contains(searchValue)
-                return Expression.AndAlso(notNullExpression, containsCall);
+                var propertyType = propertyExpression.Type;
+                var underlyingType = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
+                
+                if (underlyingType == typeof(string))
+                {
+                    return BuildStringContainsExpression(propertyExpression, searchValue);
+                }
+                else if (underlyingType.IsEnum)
+                {
+                    return BuildEnumEqualityExpression(propertyExpression, propertyType, underlyingType, searchValue);
+                }
+                else if (IsNumericType(underlyingType))
+                {
+                    return BuildNumericEqualityExpression(propertyExpression, propertyType, underlyingType, searchValue);
+                }
+                else
+                {
+                    return BuildToStringContainsExpression(propertyExpression, propertyType, underlyingType, searchValue);
+                }
             }
             catch
             {
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Builds a Contains expression for string properties.
+        /// </summary>
+        private static Expression BuildStringContainsExpression(Expression propertyExpression, string searchValue)
+        {
+            var notNullExpression = Expression.NotEqual(propertyExpression, Expression.Constant(null, typeof(string)));
+            var containsMethod = typeof(string).GetMethod("Contains", new[] { typeof(string) });
+            var searchExpression = Expression.Constant(searchValue);
+            var containsCall = Expression.Call(propertyExpression, containsMethod, searchExpression);
+            
+            return Expression.AndAlso(notNullExpression, containsCall);
+        }
+
+        /// <summary>
+        /// Builds an equality expression for enum properties.
+        /// </summary>
+        private static Expression BuildEnumEqualityExpression(Expression propertyExpression, Type propertyType, Type underlyingType, string searchValue)
+        {
+            try
+            {
+                var enumValue = Enum.Parse(underlyingType, searchValue, true);
+                var constantValue = Expression.Constant(enumValue, underlyingType);
+                
+                if (propertyType != underlyingType)
+                {
+                    // Nullable enum
+                    var hasValueProperty = propertyType.GetProperty("HasValue");
+                    var valueProperty = propertyType.GetProperty("Value");
+                    
+                    var hasValue = Expression.Property(propertyExpression, hasValueProperty);
+                    var value = Expression.Property(propertyExpression, valueProperty);
+                    var equality = Expression.Equal(value, constantValue);
+                    
+                    return Expression.AndAlso(hasValue, equality);
+                }
+                else
+                {
+                    // Non-nullable enum
+                    return Expression.Equal(propertyExpression, constantValue);
+                }
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Builds an equality expression for numeric properties.
+        /// </summary>
+        private static Expression BuildNumericEqualityExpression(Expression propertyExpression, Type propertyType, Type underlyingType, string searchValue)
+        {
+            try
+            {
+                var parsedValue = Convert.ChangeType(searchValue, underlyingType);
+                var constantValue = Expression.Constant(parsedValue, underlyingType);
+                
+                if (propertyType != underlyingType)
+                {
+                    // Nullable numeric
+                    var hasValueProperty = propertyType.GetProperty("HasValue");
+                    var valueProperty = propertyType.GetProperty("Value");
+                    
+                    var hasValue = Expression.Property(propertyExpression, hasValueProperty);
+                    var value = Expression.Property(propertyExpression, valueProperty);
+                    var equality = Expression.Equal(value, constantValue);
+                    
+                    return Expression.AndAlso(hasValue, equality);
+                }
+                else
+                {
+                    // Non-nullable numeric
+                    return Expression.Equal(propertyExpression, constantValue);
+                }
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Builds a Contains expression for other types by converting to string first.
+        /// </summary>
+        private static Expression BuildToStringContainsExpression(Expression propertyExpression, Type propertyType, Type underlyingType, string searchValue)
+        {
+            Expression stringExpression;
+            Expression notNullExpression;
+            
+            if (propertyType != underlyingType)
+            {
+                // Nullable type
+                var hasValueProperty = propertyType.GetProperty("HasValue");
+                var valueProperty = propertyType.GetProperty("Value");
+                
+                notNullExpression = Expression.Property(propertyExpression, hasValueProperty);
+                
+                var valueExpression = Expression.Property(propertyExpression, valueProperty);
+                var toStringMethod = underlyingType.GetMethod("ToString", Type.EmptyTypes);
+                stringExpression = Expression.Call(valueExpression, toStringMethod);
+            }
+            else
+            {
+                // Non-nullable type
+                var toStringMethod = underlyingType.GetMethod("ToString", Type.EmptyTypes);
+                stringExpression = Expression.Call(propertyExpression, toStringMethod);
+                notNullExpression = Expression.Constant(true);
+            }
+            
+            var containsMethod = typeof(string).GetMethod("Contains", new[] { typeof(string) });
+            var searchExpression = Expression.Constant(searchValue);
+            var containsCall = Expression.Call(stringExpression, containsMethod, searchExpression);
+            
+            return Expression.AndAlso(notNullExpression, containsCall);
+        }
+
+        /// <summary>
+        /// Checks if a type is a numeric type.
+        /// </summary>
+        private static bool IsNumericType(Type type)
+        {
+            return type == typeof(int) ||
+                   type == typeof(long) ||
+                   type == typeof(short) ||
+                   type == typeof(byte) ||
+                   type == typeof(uint) ||
+                   type == typeof(ulong) ||
+                   type == typeof(ushort) ||
+                   type == typeof(sbyte) ||
+                   type == typeof(decimal) ||
+                   type == typeof(double) ||
+                   type == typeof(float);
         }
 
         /// <summary>
